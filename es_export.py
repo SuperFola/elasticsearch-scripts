@@ -66,7 +66,7 @@ def export(db, args):
 	yield
 	export.i += 1
 	
-	# save data
+	# save data to file(s)
 	# ...
 	yield
 
