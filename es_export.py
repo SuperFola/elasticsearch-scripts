@@ -7,14 +7,16 @@ import configparser as cfgparser
 import pprint
 from datetime import datetime
 
+
 # initialize colorama
 colorama.init()
 pimp = lambda color: print(color, end='')
-unpimp = lambda: print(colorama.Style.RESET_ALL)
-pimpit = lambda color, *args, **kwargs: [pimp(color), print(*args, **kwargs), None][-1]
+unpimp = lambda: print(colorama.Style.RESET_ALL, end='')
+pimpit = lambda color, *args, **kwargs: [pimp(color), print(*args, **kwargs), unpimp(), None][-1]
 
 # debugging tools
 log = lambda mode, end=' ': print(f"[{datetime.now().time()}] {mode}:", end=end)
+convert_task_index_to_text = lambda index: _tasks[index]
 
 # pretty printer useful pretty much in all the script
 pprinter = pprint.PrettyPrinter(indent=4)
@@ -23,6 +25,19 @@ pp = lambda *args, **kwargs: pprinter.pprint(*args, **kwargs)
 # read config from current working directory
 config = cfgparser.ConfigParser()
 config.read("elasticsearch.ini")
+
+
+def export(db, args):
+	if not hasattr(export, "i"):
+		export.i = 0
+	if not hasattr(export, "tasks"):
+		export.tasks = []
+	if not hasattr(export, "task_to_string"):
+		export.task_to_string = lambda: export.tasks[export.i]
+	
+	yield export.i
+	export.i += 1
+
 
 def run(args):
 	"""
@@ -69,5 +84,15 @@ def run(args):
 			log("INFO"); pimpit(Fore.CYAN, f"Creating directories for '{args.directory}'")
 		os.makedirs(args.directory, exist_ok=True)
 	
-	
-	return 0
+	# exporting indexes
+	try:
+		for _ in export(db, args):
+			pass
+		return 0
+	except Exception as e:
+		log("ERROR"); print("A critical error occurred. It will be displayed below (for you to be able to fix it)")
+		log("INFO "); print(f"The program stopped here : {export.task_to_string()}")
+		
+		pimp(Fore.RED); log(type(e).__name__); unpimp()
+		print(e)
+		return -1
