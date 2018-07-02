@@ -1,0 +1,12 @@
+Syntax:
+	py -m MODULE import
+		[-r|--recursive]
+		[-p|--path path]
+		index_name
+	
+	py -m MODULE export
+		[--batch-size size>0]
+		[--start index>0]
+		[--directory name]
+		[--filename name]
+		[--start-id id]
