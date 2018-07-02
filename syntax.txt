@@ -3,6 +3,7 @@ Syntax:
 		[-r|--recursive]
 		[-p|--path path]
 		index_name
+		[-v|--verbosity]
 	
 	py -m MODULE export
 		[--batch-size size>0]
@@ -10,3 +11,4 @@ Syntax:
 		[--directory name]
 		[--filename name]
 		[--start-id id]
+		[-v|--verbosity]
