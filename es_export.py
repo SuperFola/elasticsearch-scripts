@@ -31,24 +31,59 @@ def export(db, args):
 	if not hasattr(export, "i"):
 		export.i = 0
 	if not hasattr(export, "tasks"):
-		export.tasks = []
+		export.tasks = [
+			"initializing",
+			"finding indices",
+			"retrieving wanted index",
+			"preparing data for saving",
+			"saving data to disk"
+		]
 	if not hasattr(export, "task_to_string"):
-		export.task_to_string = lambda: export.tasks[export.i]
+		export.task_to_string = lambda: export.tasks[export.i - 1]
 	
-	yield export.i
+	# initializing
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"{db.count()}")
+	yield
 	export.i += 1
+	
+	# find all the indices
+	indices = [i.strip() for i in db.cat.indices(h='index').split("\n") if i]
+	if args.verbosity or args.dump_indexes:
+		log("INFO"); pimpit(Fore.CYAN, f"{indices}")
+		if args.dump_indexes:
+			return
+	yield
+	export.i += 1
+	
+	# retrieving data of the wanted index
+	# ...
+	yield
+	export.i += 1
+	
+	# preparing data for saving to file(s) (cut in multiple lists of correct size (--batch-size X), etc)
+	# ...
+	yield
+	export.i += 1
+	
+	# save data
+	# ...
+	yield
 
 
 def run(args):
 	"""
 	Syntax: py -m MODULE export
 		[--batch-size size>0]
-		[--start index>0]
 		[--directory name]
 		[--filename name]
-		[--start-id id]
+		(--index name|--dump-indexes)
 		[-v|--verbosity]
 	"""
+	
+	if not args.index and not args.dump_indexes:
+		log("ERROR"); pimpit(Fore.RED, "You must give either an index to save to disk or ask to dump the indexes available")
+		return -1
 	
 	# connecting to elasticsearch
 	db = es.Elasticsearch(
@@ -91,7 +126,7 @@ def run(args):
 		return 0
 	except Exception as e:
 		log("ERROR"); print("A critical error occurred. It will be displayed below (for you to be able to fix it)")
-		log("INFO "); print(f"The program stopped here : {export.task_to_string()}")
+		log("INFO "); print(f"The program stopped at : {export.task_to_string().title()}")
 		
 		pimp(Fore.RED); log(type(e).__name__); unpimp()
 		print(e)
