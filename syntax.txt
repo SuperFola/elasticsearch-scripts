@@ -9,5 +9,6 @@ Syntax:
 		[--batch-size size>0]
 		[--directory name]
 		[--filename name]
+		[-q|--quiet]
 		(--index name|--dump-indexes)
 		[-v|--verbosity]

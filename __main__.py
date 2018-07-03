@@ -16,6 +16,7 @@ def main():
 	parser_export.add_argument("--batch-size", help="Number of documents per files", type=int, default=0)
 	parser_export.add_argument("--directory", help="Folder where the indexes will be saved. Default value is current directory", type=str, default=f".{os.sep}")
 	parser_export.add_argument("--filename", help="Filename for the indexes. Default value is 'index'", type=str, default="index")
+	parser_export.add_argument("-q", "--quiet", help="Silently answers 'yes' to any question", action="store_true")
 	# setting up a group (either 'index' or '--dump-indexes' must be set)
 	group = parser_export.add_mutually_exclusive_group()
 	group.add_argument("--index", help="Index to export", type=str)

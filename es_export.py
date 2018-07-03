@@ -137,6 +137,7 @@ def run(args):
 		[--batch-size size>0]
 		[--directory name]
 		[--filename name]
+		[-q|--quiet]
 		(--index name|--dump-indexes)
 		[-v|--verbosity]
 	"""
@@ -144,6 +145,8 @@ def run(args):
 	if not args.index and not args.dump_indexes:
 		log("ERROR"); pimpit(Fore.RED, "You must give either an index to save to disk or ask to dump the indexes available")
 		return -1
+	
+	log("INFO"); pimpit(Fore.CYAN, "Starting")
 	
 	# connecting to elasticsearch
 	db = es.Elasticsearch(
@@ -179,14 +182,15 @@ def run(args):
 			log("INFO"); pimpit(Fore.CYAN, f"Creating directories for '{args.directory}'")
 		os.makedirs(args.directory, exist_ok=True)
 		if glob.glob(f"{args.directory}{os.sep}*"):
-			log("WARNING"); pimpit(Fore.YELLOW, f"Directory {args.directory} is not empty !")
-			log("INFO"); pimpit(Fore.CYAN, "Would you like to continue ? If so, the directory will be wiped out.") 
-			ans = ""
-			while ans.lower().strip() not in ('no', 'yes', 'n', 'y', 'non', 'oui', 'n', 'o', '0', '1'):
-				log("Q"); ans = input("[yes|no] > ")
-			if ans.lower().strip() in ('no', 'n', 'non', 'n', '0'):
-				log("INFO"); pimpit(Fore.CYAN, "Aborting.")
-				return 0
+			if not args.quiet:
+				log("WARNING"); pimpit(Fore.YELLOW, f"Directory {args.directory} is not empty !")
+				log("INFO"); pimpit(Fore.CYAN, "Would you like to continue ? If so, the directory will be wiped out.") 
+				ans = ""
+				while ans.lower().strip() not in ('no', 'yes', 'n', 'y', 'non', 'oui', 'n', 'o', '0', '1'):
+					log("Q"); ans = input("[yes|no] > ")
+				if ans.lower().strip() in ('no', 'n', 'non', 'n', '0'):
+					log("INFO"); pimpit(Fore.CYAN, "Aborting.")
+					return 0
 			for file in glob.glob(f"{args.directory}{os.sep}*"):
 				os.remove(file)
 	
@@ -194,6 +198,7 @@ def run(args):
 	try:
 		for _ in export(db, args):
 			pass
+		log("INFO"); pimpit(Fore.CYAN, "Done")
 		return 0
 	except Exception as e:
 		log("ERROR"); print("A critical error occurred. It will be displayed below (for you to be able to fix it)")
