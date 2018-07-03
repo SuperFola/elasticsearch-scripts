@@ -8,6 +8,7 @@ import pprint
 from datetime import datetime
 import glob
 import ast
+import time
 
 
 # initialize colorama
@@ -34,11 +35,44 @@ def import_(db, args):
 		import_.i = 0
 	if not hasattr(import_, "tasks"):
 		import_.tasks = [
+			"checking if wanted index is free for use",
+			"loading mappings and settings",
+			"creating index",
 			"searching files to import",
-			"assembling files to recreate an index"
+			"assembling files to recreate an index",
+			"inserting data into index",
+			"optimizing index"
 		]
 	if not hasattr(import_, "task_to_string"):
 		import_.task_to_string = lambda: import_.tasks[import_.i - 1]
+	
+	# checks if wanted index is free for use
+	if db.indices.exists(args.index):
+		log("ERROR"); pimpit(Fore.RED, f"Index '{args.index}' already exists, aborting")
+		raise Exception("Choose another name for the index to create")
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"Index '{args.index}' is free for use")
+	yield
+	import_.i += 1
+	
+	# loads	mappings and settings
+	information = {}
+	info_filename = f"{args.directory}{os.sep}index-{args.filename}.json"
+	if not os.path.exists(info_filename):
+		log("ERROR"); pimpit(Fore.RED, f"The mapping+setting file 'index-{args.filename}.json' can not be found")
+		raise Exception("Retry to export the wanted index")
+	with open(info_filename, encoding="utf-8") as file:
+		information = ast.literal_eval(file.read())
+	yield
+	import_.i += 1
+	
+	# creates index
+	db.indices.create(args.index, {
+		"settings": information["settings"]
+		, "mappings": information["mappings"]
+	})
+	yield
+	import_.i += 1
 	
 	# searches files to import
 	files = [f for f in glob.glob(f"{args.directory}{os.sep}*") if os.path.isfile(f) and os.path.basename(f)[:len(args.filename)] == args.filename]
@@ -57,6 +91,44 @@ def import_(db, args):
 			tmp_index += ast.literal_eval(file.read())
 	if args.verbosity:
 		log("INFO"); pimpit(Fore.CYAN, f"Index created from files has a size of {len(tmp_index)} elements")
+	yield
+	import_.i += 1
+	
+	# inserts data into index
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"Putting aliases for index '{args.index}'")
+	for alias in information["aliases"].keys():
+		db.indices.put_alias(alias, args.index)
+	
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"Importing the documents for index '{args.index}'")
+	for document in tmp_index:
+		db.index(args.index, document["_type"], document["_source"], document["_id"])
+	
+	# checking if the right amount of data was exported
+	db.indices.flush(args.index)
+	time.sleep(2)
+	total_hits = db.search(args.index, search_type="count")["hits"]["total"]
+	if total_hits == len(tmp_index):
+		log("INFO"); pimpit(Fore.GREEN, f"All the documents were imported into the index '{args.index}'")
+	else:
+		log("ERROR"); pimpit(Fore.RED, f"{len(tmp_index) - total_hits} document(s) missing in index")
+		raise Exception("Try to import the index again")
+	
+	# open the index to make it available for search
+	db.indices.open(args.index)
+	if args.verbosity:
+		log("INFO"); pimpit(f"Index '{args.index}' opened to make it available for search")
+	yield
+	import_.i += 1
+	
+	# optimizing index (only if wanted)
+	if config.getboolean("General", "optimize index after creating"):
+		if args.verbosity:
+			log("INFO"); pimpit(Fore.CYAN, f"Optimizing index '{args.index}'")
+		db.indices.optimize(args.index)
+		if args.verbosity:
+			log("INFO"); pimpit(Fore.CYAN, f"Index '{args.index}' optimized")
 	yield
 	import_.i += 1
 

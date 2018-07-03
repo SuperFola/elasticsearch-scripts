@@ -38,6 +38,7 @@ def export(db, args):
 			"initializing",
 			"finding indices",
 			"retrieving number of documents from the wanted index",
+			"getting information about the index",
 			"getting documents",
 			"preparing data for saving",
 			"saving data to disk"
@@ -47,16 +48,17 @@ def export(db, args):
 	
 	# initializing
 	if args.verbosity:
-		log("INFO"); pimpit(Fore.CYAN, f"GET _count => {db.count()}")
+		log("INFO"); pimpit(Fore.CYAN, f"GET /_count => {db.count()}")
 	yield
 	export.i += 1
 	
 	# find all the indices
 	indices = [i.strip() for i in db.cat.indices(h='index').split("\n") if i]
-	if args.verbosity or args.dump_indexes:
-		log("INFO"); pimpit(Fore.CYAN, f"GET _cat/indices => {indices}")
-		if args.dump_indexes:
-			return
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"GET /_cat/indices => {indices}")
+	if args.dump_indexes:
+		print(f"{indices}")
+		return
 	yield
 	export.i += 1
 	
@@ -68,7 +70,14 @@ def export(db, args):
 	yield
 	export.i += 1
 	
-	# get documents from the wanted index (if no batch-size specified,
+	# gets information about the index
+	information = db.indices.get(args.index)
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"GET /{args.index} => {information}")
+	yield
+	export.i += 1
+	
+	# gets documents from the wanted index (if no batch-size specified,
 	#   retrieve everything per batch of 256 (can be change in config file))
 	batch_size = config.get("General", "batch size", fallback=0) if args.batch_size == 0 else args.batch_size
 	try:
@@ -83,7 +92,7 @@ def export(db, args):
 	data = []
 	for i in range(batch_count):
 		for content in db.search(args.index, from_=i * batch_size, size=batch_size)["hits"]["hits"]:
-			data.append(content["_source"])
+			data.append(content)
 	if args.verbosity:
 		log("INFO"); pimpit(Fore.CYAN, f"Retrieved {len(data)} documents from index {args.index}")
 	yield
@@ -113,21 +122,20 @@ def export(db, args):
 	export.i += 1
 	
 	# save data to file(s)
+	cwd = os.getcwd()
+	os.chdir(args.directory)
+	with open(f"index-{args.index}.json", "w") as file:
+		file.write(str(information[args.index]))
 	if args.batch_size != 0:
 		# save to multiple files
-		cwd = os.getcwd()
-		os.chdir(args.directory)
 		for i, content in enumerate(split_data):
 			i_zeropadded = str(i).zfill(count_digits(len(split_data)))
 			with open(f"{args.index}.{i_zeropadded}.json", "w", encoding="utf-8") as file:
 				file.write(str(content))
-		os.chdir(cwd)
 	else:
-		cwd = os.getcwd()
-		os.chdir(args.directory)
 		with open(f"{args.index}.json", "w", encoding="utf-8") as file:
 			file.write(str(data))
-		os.chdir(cwd)
+	os.chdir(cwd)
 	if args.verbosity:
 		log("INFO"); pimpit(Fore.GREEN, f"Index {args.index} saved to disk at {args.directory}{os.sep}{args.index}[.x].json")
 	yield
@@ -149,7 +157,8 @@ def run(args):
 		log("ERROR"); pimpit(Fore.RED, "You must give either an index to save to disk or ask to dump the indexes available")
 		return -1
 	
-	log("INFO"); pimpit(Fore.CYAN, "Starting")
+	if not args.dump_indexes:
+		log("INFO"); pimpit(Fore.CYAN, "Starting")
 	
 	# connecting to elasticsearch
 	db = es.Elasticsearch(
@@ -199,7 +208,8 @@ def run(args):
 	try:
 		for _ in export(db, args):
 			pass
-		log("INFO"); pimpit(Fore.CYAN, "Done")
+		if not args.dump_indexes:
+			log("INFO"); pimpit(Fore.CYAN, "Done")
 		return 0
 	except Exception as e:
 		log("ERROR"); print("A critical error occurred. It will be displayed below (for you to be able to fix it)")
