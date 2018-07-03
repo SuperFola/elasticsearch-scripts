@@ -8,7 +8,7 @@ from . import es_import
 
 def main():
 	# creating a commande line arguments parser
-	parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser("py -m elasticsearch-scripts")
 	subparsers = parser.add_subparsers(dest="subparser", help="Sub-modules")
 	
 	# creating the first subparser "export"
@@ -26,7 +26,6 @@ def main():
 	parser_import = subparsers.add_parser("import", help="Module to import indexes to elasticsearch")
 	
 	args = parser.parse_args()
-	print(args)
 	
 	# return the status code of the submodule invoked
 	if args.subparser == "export":

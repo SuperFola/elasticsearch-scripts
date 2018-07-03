@@ -6,6 +6,7 @@ import os
 import configparser as cfgparser
 import pprint
 from datetime import datetime
+import glob
 
 
 # initialize colorama
@@ -34,41 +35,100 @@ def export(db, args):
 		export.tasks = [
 			"initializing",
 			"finding indices",
-			"retrieving wanted index",
+			"retrieving number of documents from the wanted index",
+			"getting documents",
 			"preparing data for saving",
 			"saving data to disk"
 		]
 	if not hasattr(export, "task_to_string"):
-		export.task_to_string = lambda: export.tasks[export.i - 1]
+		export.task_to_string = lambda: export.tasks[export.i]
 	
 	# initializing
 	if args.verbosity:
-		log("INFO"); pimpit(Fore.CYAN, f"{db.count()}")
+		log("INFO"); pimpit(Fore.CYAN, f"GET _count => {db.count()}")
 	yield
 	export.i += 1
 	
 	# find all the indices
 	indices = [i.strip() for i in db.cat.indices(h='index').split("\n") if i]
 	if args.verbosity or args.dump_indexes:
-		log("INFO"); pimpit(Fore.CYAN, f"{indices}")
+		log("INFO"); pimpit(Fore.CYAN, f"GET _cat/indices => {indices}")
 		if args.dump_indexes:
 			return
 	yield
 	export.i += 1
 	
-	# retrieving data of the wanted index
-	# ...
+	# retrieve number of documents from the wanted index
+	data_count = db.search(args.index, search_type="count")
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"GET /{args.index}/search?search_type=count => {data_count}")
+	total_hits = data_count["hits"]["total"]
 	yield
 	export.i += 1
 	
-	# preparing data for saving to file(s) (cut in multiple lists of correct size (--batch-size X), etc)
-	# ...
+	# get documents from the wanted index (if no batch-size specified,
+	#   retrieve everything per batch of 256 (can be change in config file))
+	batch_size = config.get("General", "batch size", fallback=0) if args.batch_size == 0 else args.batch_size
+	try:
+		batch_size = int(batch_size)
+	except ValueError:
+		batch_size = 0
+		log("ERROR"); pimpip(Fore.RED, "The default batch size given in the configuration file is not an integer")
+	if batch_size == 0:
+		log("ERROR"); pimpit(Fore.RED, "Batch size can not be equal to 0")
+		raise Exception("Fix either the command or the configuration file")
+	batch_count = total_hits // batch_size + (1 if total_hits % batch_size else 0)
+	data = []
+	for i in range(batch_count):
+		for content in db.search(args.index, from_=i * batch_size, size=batch_size)["hits"]["hits"]:
+			data.append(content["_source"])
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.CYAN, f"Retrieved {len(data)} documents from index {args.index}")
+	yield
+	export.i += 1
+	
+	# prepare data for saving to file(s) (cut in multiple lists of correct size (--batch-size X), etc)
+	split_data = []
+	if args.batch_size != 0:
+		# the user wants to split the dat in multiple files
+		split_data = []
+		current = []
+		for i, d in enumerate(data):
+			if len(current) == args.batch_size:
+				if args.verbosity:
+					log("INFO"); pimpit(Fore.CYAN, f"Batch no {i % args.batch_size} contains {len(current)} documents")
+				split_data.append(current)
+				current = []
+				continue
+			current.append(d)
+		if current:
+			if args.verbosity:
+				log("INFO"); pimpit(Fore.CYAN, f"Batch no {len(split_data)} contains {len(current)} documents")
+			split_data.append(current)
+			current = []
+		
 	yield
 	export.i += 1
 	
 	# save data to file(s)
-	# ...
+	if args.batch_size != 0:
+		# save to multiple files
+		cwd = os.getcwd()
+		os.chdir(args.directory)
+		for i, content in enumerate(split_data):
+			with open(f"{args.index}.{i}.json", "w", encoding="utf-8") as file:
+				file.write(str(content))
+		os.chdir(cwd)
+	else:
+		cwd = os.getcwd()
+		os.chdir(args.directory)
+		with open(f"{args.index}.json", "w", encoding="utf-8") as file:
+			file.write(str(data))
+		os.chdir(cwd)
+	if args.verbosity:
+		log("INFO"); pimpit(Fore.GREEN, f"Index {args.index} saved to disk at {args.directory}{os.sep}{args.index}[.x].json")
 	yield
+	export.i += 1
 
 
 def run(args):
@@ -118,6 +178,17 @@ def run(args):
 		if args.verbosity:
 			log("INFO"); pimpit(Fore.CYAN, f"Creating directories for '{args.directory}'")
 		os.makedirs(args.directory, exist_ok=True)
+		if glob.glob(f"{args.directory}{os.sep}*"):
+			log("WARNING"); pimpit(Fore.YELLOW, f"Directory {args.directory} is not empty !")
+			log("INFO"); pimpit(Fore.CYAN, "Would you like to continue ? If so, the directory will be wiped out.") 
+			ans = ""
+			while ans.lower().strip() not in ('no', 'yes', 'n', 'y', 'non', 'oui', 'n', 'o', '0', '1'):
+				log("Q"); ans = input("[yes|no] > ")
+			if ans.lower().strip() in ('no', 'n', 'non', 'n', '0'):
+				log("INFO"); pimpit(Fore.CYAN, "Aborting.")
+				return 0
+			for file in glob.glob(f"{args.directory}{os.sep}*"):
+				os.remove(file)
 	
 	# exporting indexes
 	try:
@@ -128,6 +199,5 @@ def run(args):
 		log("ERROR"); print("A critical error occurred. It will be displayed below (for you to be able to fix it)")
 		log("INFO "); print(f"The program stopped at : {export.task_to_string().title()}")
 		
-		pimp(Fore.RED); log(type(e).__name__); unpimp()
-		print(e)
+		log(type(e).__name__); pimpit(Fore.RED, e)
 		return -1
