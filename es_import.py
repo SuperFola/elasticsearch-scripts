@@ -6,6 +6,7 @@ import os
 import configparser as cfgparser
 import pprint
 from datetime import datetime
+import glob
 
 
 # initialize colorama
@@ -50,10 +51,13 @@ def run(args):
 	"""
 	Syntax: py -m MODULE import
 		[-r|--recursive]
-		[-p|--path path]
-		index_name
+		[--directory path]
+		filename
+		index
 		[-v|--verbosity]
 	"""
+	
+	log("INFO"); pimpit(Fore.CYAN, "Starting")
 	
 	# connecting to elasticsearch
 	db = es.Elasticsearch(
@@ -77,27 +81,29 @@ def run(args):
 	
 	# checking if the db is running
 	if db.info()['status'] != 200:
-		pimp(Fore.RED)
-		print(f"We have a problem Houston ! Elastic search is returning {db.info()['status']} instead of 200 OK!\n"
+		pimpit(Fore.RED, f"We have a problem Houston ! Elastic search is returning {db.info()['status']} instead of 200 OK!\n"
 				"Contact the server administrator or double check the configuration of the script")
-		unpimp()
 		return -1
 	
-	# creating needed directories
-	if args.directory and args.directory != f".{os.sep}":
-		if args.verbosity:
-			log("INFO"); pimpit(Fore.CYAN, f"Creating directories for '{args.directory}'")
-		os.makedirs(args.directory, exist_ok=True)
+	# checking if wanted directory exists
+	if args.directory and not os.path.exists(args.directory):
+		log("ERROR"); pimpit(Fore.RED, f"{args.directory} does not exist, can not find wanted files")
+		return -1
+	
+	# checking if wanted files exist in the wanted directory
+	if not glob.glob(f"{args.directory}{os.sep}{args.filename}*"):
+		log("ERROR"); pimpit(Fore.RED, f"Can not find any matching file for {args.filename} in {args.directory}")
+		return -1
 	
 	# exporting indexes
 	try:
 		for _ in import_(db, args):
 			pass
+		log("INFO"); pimpit(Fore.CYAN, "Done")
 		return 0
 	except Exception as e:
 		log("ERROR"); print("A critical error occurred. It will be displayed below (for you to be able to fix it)")
 		log("INFO "); print(f"The program stopped at : {export.task_to_string().title()}")
 		
-		pimp(Fore.RED); log(type(e).__name__); unpimp()
-		print(e)
+		log(type(e).__name__); pimpit(Fore.RED, e)
 		return -1

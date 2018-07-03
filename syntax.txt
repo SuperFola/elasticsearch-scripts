@@ -1,8 +1,9 @@
 Syntax:
 	py -m MODULE import
 		[-r|--recursive]
-		[-p|--path path]
-		index_name
+		[--directory path]
+		filename
+		index
 		[-v|--verbosity]
 	
 	py -m MODULE export

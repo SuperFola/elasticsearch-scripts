@@ -170,10 +170,8 @@ def run(args):
 	
 	# checking if the db is running
 	if db.info()['status'] != 200:
-		pimp(Fore.RED)
-		print(f"We have a problem Houston ! Elastic search is returning {db.info()['status']} instead of 200 OK!\n"
+		pimpit(Fore.RED, f"We have a problem Houston ! Elastic search is returning {db.info()['status']} instead of 200 OK!\n"
 				"Contact the server administrator or double check the configuration of the script")
-		unpimp()
 		return -1
 	
 	# creating needed directories

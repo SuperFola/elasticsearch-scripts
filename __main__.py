@@ -25,6 +25,11 @@ def main():
 	
 	# creating the second subparser "import"
 	parser_import = subparsers.add_parser("import", help="Module to import indexes to elasticsearch")
+	parser_import.add_argument("--directory", help="Folder where the indexes will be saved. Default value is current directory", type=str, default=f".{os.sep}")
+	parser_import.add_argument("filename", help="Specify the pattern of filename", type=str, default="index")
+	parser_import.add_argument("index", help="Which index should be created based on the given files", type=str)
+	parser_import.add_argument("-q", "--quiet", help="Silently answers 'yes' to any question", action="store_true")
+	parser_import.add_argument("-v", "--verbosity", help="Enable verbose logging", action="store_true")
 	
 	args = parser.parse_args()
 	
