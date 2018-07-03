@@ -7,6 +7,7 @@ import configparser as cfgparser
 import pprint
 from datetime import datetime
 import glob
+import math
 
 
 # initialize colorama
@@ -18,6 +19,7 @@ pimpit = lambda color, *args, **kwargs: [pimp(color), print(*args, **kwargs), un
 # debugging tools
 log = lambda mode, end=' ': print(f"[{datetime.now().time()}] {mode}:", end=end)
 convert_task_index_to_text = lambda index: _tasks[index]
+count_digits = lambda x: math.ceil(math.log10(x))
 
 # pretty printer useful pretty much in all the script
 pprinter = pprint.PrettyPrinter(indent=4)
@@ -94,13 +96,13 @@ def export(db, args):
 		split_data = []
 		current = []
 		for i, d in enumerate(data):
+			current.append(d)
 			if len(current) == args.batch_size:
 				if args.verbosity:
-					log("INFO"); pimpit(Fore.CYAN, f"Batch no {i % args.batch_size} contains {len(current)} documents")
+					log("INFO"); pimpit(Fore.CYAN, f"Batch no {len(split_data)} contains {len(current)} documents")
 				split_data.append(current)
 				current = []
-				continue
-			current.append(d)
+				
 		if current:
 			if args.verbosity:
 				log("INFO"); pimpit(Fore.CYAN, f"Batch no {len(split_data)} contains {len(current)} documents")
@@ -116,7 +118,8 @@ def export(db, args):
 		cwd = os.getcwd()
 		os.chdir(args.directory)
 		for i, content in enumerate(split_data):
-			with open(f"{args.index}.{i}.json", "w", encoding="utf-8") as file:
+			i_zeropadded = str(i).zfill(count_digits(len(split_data)))
+			with open(f"{args.index}.{i_zeropadded}.json", "w", encoding="utf-8") as file:
 				file.write(str(content))
 		os.chdir(cwd)
 	else:
