@@ -8,6 +8,7 @@ import pprint
 from datetime import datetime
 import glob
 import ast
+import threading
 import time
 
 
@@ -86,9 +87,24 @@ def import_(db, args):
 	
 	# re-assembles the file(s) to recreate an index
 	tmp_index = []
-	for filename in files:
+	threads = []
+	
+	def fill_data(filename):
+		nonlocal tmp_index
 		with open(filename, encoding="utf-8") as file:
-			tmp_index += ast.literal_eval(file.read())
+			d = ast.literal_eval(file.read())
+			for content in d:
+				tmp_index.append(content)
+	
+	for filename in files:
+		threads.append(threading.Thread(target=fill_data, args=(filename,)))
+		threads[-1].start()
+	
+	# wait for threads to terminate
+	while True:
+		if all(not t.is_alive() for t in threads):
+			break
+	
 	if args.verbosity:
 		log("INFO"); pimpit(Fore.CYAN, f"Index created from files has a size of {len(tmp_index)} elements")
 	yield
@@ -102,10 +118,26 @@ def import_(db, args):
 	
 	if args.verbosity:
 		log("INFO"); pimpit(Fore.CYAN, f"Importing the documents for index '{args.index}'")
-	for document in tmp_index:
-		db.index(args.index, document["_type"], document["_source"], document["_id"])
+	
+	threads = []
+	
+	def fill_index(documents):
+		nonlocal db, args
+		if len(documents) != 0:
+			for doc in documents:
+				db.index(args.index, doc["_type"], doc["_source"], doc["_id"])
+	
+	for i in range(len(tmp_index) // 512 + 1):
+		threads.append(threading.Thread(target=fill_index, args=(tmp_index[i * 512:(i + 1) * 512],)))
+		threads[-1].start()
+	
+	# wait for threads to terminate
+	while True:
+		if all(not t.is_alive() for t in threads):
+			break
 	
 	# checking if the right amount of data was exported
+	log("INFO"); pimpit(Fore.CYAN, f"Documents imported, checking total_hits")
 	db.indices.flush(args.index)
 	time.sleep(2)
 	total_hits = db.search(args.index, search_type="count")["hits"]["total"]
