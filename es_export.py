@@ -8,6 +8,7 @@ import pprint
 from datetime import datetime
 import glob
 import math
+import threading
 
 
 # initialize colorama
@@ -84,15 +85,28 @@ def export(db, args):
 		batch_size = int(batch_size)
 	except ValueError:
 		batch_size = 0
-		log("ERROR"); pimpip(Fore.RED, "The default batch size given in the configuration file is not an integer")
+		log("ERROR"); pimpit(Fore.RED, "The default batch size given in the configuration file is not an integer")
 	if batch_size == 0:
 		log("ERROR"); pimpit(Fore.RED, "Batch size can not be equal to 0")
 		raise Exception("Fix either the command or the configuration file")
 	batch_count = total_hits // batch_size + (1 if total_hits % batch_size else 0)
 	data = []
-	for i in range(batch_count):
+	threads = []
+	
+	def fill_data(i):
+		nonlocal db, args, data, batch_size
 		for content in db.search(args.index, from_=i * batch_size, size=batch_size)["hits"]["hits"]:
 			data.append(content)
+	
+	for i in range(batch_count):
+		threads.append(threading.Thread(target=fill_data, args=(i,)))
+		threads[-1].start()
+	
+	# wait for threads to terminate
+	while True:
+		if all(not t.is_alive() for t in threads):
+			break
+	
 	if args.verbosity:
 		log("INFO"); pimpit(Fore.CYAN, f"Retrieved {len(data)} documents from index {args.index}")
 	yield
@@ -124,7 +138,7 @@ def export(db, args):
 	# save data to file(s)
 	cwd = os.getcwd()
 	os.chdir(args.directory)
-	with open(f"index-{args.index}.json", "w") as file:
+	with open(f"index-{args.index}.json", "w", encoding="utf-8") as file:
 		file.write(str(information[args.index]))
 	if args.batch_size != 0:
 		# save to multiple files
